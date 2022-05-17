@@ -2,7 +2,7 @@
 A bunch of functions to make code shorter, and easier to read.
 */
 
-import {Guild, User, GuildMember, Message, MessageEmbed} from "discord.js";
+import {Guild, User, GuildMember, Message, MessageEmbed, Interaction} from "discord.js";
 import Client from "./Client";
 import * as Types from "./Types";
 
@@ -43,6 +43,21 @@ export function quickError(msg: Message, error: string): Promise<Message> {
             allowedMentions: {
                 repliedUser: false
             }
+        });
+}
+
+export function interactionQuickError(interaction: Interaction, error: string, empheral?: Boolean): Promise<Message> {
+    let embed = new MessageEmbed();
+        embed.setTitle("Error");
+        embed.setDescription(error);
+        embed.setColor("#ff0000");
+        // @ts-ignore - Typescript thinks interaction could be a non-command interaction
+        return interaction.reply({
+            embeds: [embed],
+            allowedMentions: {
+                repliedUser: false
+            },
+            ephemeral: empheral || false
         });
 }
 

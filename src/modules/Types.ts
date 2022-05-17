@@ -1,5 +1,7 @@
-import {Message} from "discord.js";
+import {Interaction, Message} from "discord.js";
+import {SlashCommandBuilder} from '@discordjs/builders';
 import Client from "./Client";
+import * as E6Types from "./E621Api";
 
 export type UserData = {
     id: string,
@@ -9,6 +11,10 @@ export type UserData = {
         clicker?: {
             clicks: number
         }
+    },
+    e621?: {
+        username: string,
+        apikey: string
     }
 }
 
@@ -22,7 +28,9 @@ export type Config = {
     prefix: string,
     token: string,
     ownerID: string,
-    coOwnerID: string
+    coOwnerID: string,
+    testGuildId: string,
+    botID: string
 }
 
 export type Command = {
@@ -33,3 +41,10 @@ export type Command = {
     execute: (msg: Message, client: Client) => void | Promise<Message>
     hidden: boolean /* hides the command from help */
 }
+
+export type SlashCommand = {
+    data: SlashCommandBuilder
+    exec: (interaction: Interaction, client: Client) => void | Promise<Message | undefined>
+}
+
+export type E6QueueItem = Promise<E6Types.Post>;

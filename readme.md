@@ -1,3 +1,3 @@
-## Undefined
+## Diffurent
 
-A work in progress discord bot.
+A shitty discord bot made for furries.

@@ -3,9 +3,14 @@ import * as Types from "./Types";
 import * as fs from "fs";
 import commands from "../commands/index"
 import chalk from "chalk";
+import { REST } from "@discordjs/rest";
+import { Routes } from "discord-api-types/v9";
+ 
 class Bot extends Client {
+    e6queue: Array<Types.E6QueueItem>;
     config: Types.Config;
     commands: Array<Types.Command>;
+    slashCommands: Array<Types.SlashCommand>;
     Users: Array<Types.UserData>;
     Servers: Array<Types.ServerData>;
     constructor(){
@@ -28,6 +33,8 @@ class Bot extends Client {
         }
         this.config = require("../../config.json")
         this.commands = commands;
+        this.slashCommands = new Array();
+        this.e6queue = new Array();
         this.Users = new Array();
         this.Servers = new Array();
 
@@ -57,6 +64,28 @@ class Bot extends Client {
             }
             console.debug(chalk.green("Autosaved!"));
         }, autoSaveInterval*1000)
+    }
+    addSlashCommand(command: Types.SlashCommand){
+        this.slashCommands.push(command);
+    }
+    registerSlashCommands(){
+        var commandData = [];
+        for(var i = 0; i < this.slashCommands.length; i++){
+            var command = this.slashCommands[i];
+            commandData.push(command.data.toJSON());
+        }
+        const rest = new REST( {version: "10"} ).setToken(this.config.token);
+        rest.put(Routes.applicationGuildCommands(this.config.botID, this.config.testGuildId), {body: commandData}).then(() => {
+            console.log(chalk.green("Successfully registered slash commands!"));
+        })
+    }
+    removeSlashCommand(id: string){
+        
+        this.application?.commands.fetch(id)!.then(c => {
+            c.delete();
+        }).catch(err => {
+            return "yeah mate couldn't find whatever the fuck you're looking for"
+        })
     }
 }
 export default Bot;
