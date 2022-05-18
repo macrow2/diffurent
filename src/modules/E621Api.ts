@@ -111,8 +111,12 @@ export class E621Api {
     }
     public async voteOnPost(id: number, vote: -1 | 1): Promise<void> {
         if(!this.credentials) throw new Error("No credentials provided");
-        const res = await snek.post(`https://e621.net/posts/${id}/vote.json?score=${vote}`)
+        const res = await snek.post(`https://e621.net/posts/${id}/votes.json`)
         .set("Authorization", `Basic ${Buffer.from(`${this.credentials.username}:${this.credentials.apikey}`).toString("base64")}`)
+        .send({
+            "score": vote.toString(),
+            "no_unvote": false
+        });
     }
     public async addFavorite(id: number): Promise<void> {
         if(!this.credentials) throw new Error("No credentials provided");

@@ -45,7 +45,9 @@ const exec = async (interaction: Interaction, client: Client) => {
 
     // if we get here, the login was successful
     
-    userData.e621 = {
+    if(userData.e621 === undefined) userData.e621 = {};
+
+    userData.e621.auth = {
         username: username,
         apikey: apikey
     }

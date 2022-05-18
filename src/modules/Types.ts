@@ -13,8 +13,11 @@ export type UserData = {
         }
     },
     e621?: {
-        username: string,
-        apikey: string
+        auth?: {
+            username: string,
+            apikey: string
+        }
+        blacklist?: string[]
     }
 }
 

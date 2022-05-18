@@ -29,10 +29,7 @@ const exec = async (interaction: Interaction, client: Client) => {
     const page = interaction.options.getInteger("page")
     let userData = getUserData(interaction.user, client);
 
-    const api = new E621Api(userData.e621 ? {
-        username: userData.e621.username,
-        apikey: userData.e621.apikey
-    } : undefined);
+    const api = new E621Api(userData.e621?.auth ? userData.e621.auth : undefined);
 
     try {
         const posts = await api.getPosts(tags.split(" "), 25, page || 1);
@@ -71,7 +68,7 @@ const exec = async (interaction: Interaction, client: Client) => {
         }
 
         const row1 = new MessageActionRow()
-            .addComponents(
+            .addComponents( // server emojis since ios discord doesn't use twemoji
                 new MessageButton()
                     .setEmoji("<:left:976302767847112755>")
                     .setCustomId("prev")
@@ -81,19 +78,19 @@ const exec = async (interaction: Interaction, client: Client) => {
                     .setCustomId("next")
                     .setStyle("PRIMARY"),
                 new MessageButton()
-                    .setEmoji("⭐")
+                    .setEmoji("<:star:976540353714876507>")
                     .setCustomId("favorite")
                     .setStyle("PRIMARY"),
                 new MessageButton()
                     .setEmoji("<:up:976302767750656080>")
                     .setCustomId("upvote")
                     .setStyle("PRIMARY")
-                    .setDisabled(true),
+                    .setDisabled(false),
                 new MessageButton()
                     .setEmoji("<:down:976302767700344882>")
                     .setCustomId("downvote")
                     .setStyle("PRIMARY")
-                    .setDisabled(true)
+                    .setDisabled(false)
             )
 
         if(((firstPost.rating == "e" || firstPost.rating == "q") && interaction.channel.nsfw) || firstPost.rating == "s") {
@@ -134,31 +131,31 @@ const exec = async (interaction: Interaction, client: Client) => {
                         });
                     break;
                     case "favorite":
-                        if(!userData.e621) {
+                        if(!userData.e621?.auth) {
                             interactionQuickError(i, "You need to set up your e621 account first!", true);
                             break;
                         };
-                        var api = new E621Api(userData.e621);
+                        var api = new E621Api(userData.e621.auth);
                         api.addFavorite(posts[postIndex].id).then(() => {
                             interactionQuickInfo(i, `Added post ${posts[postIndex].id} to your favorites!`, true, "To remove it, you must go to the website and remove it there. (for now)");
                         })
                     break;
                     case "upvote":
-                        if(!userData.e621) {
+                        if(!userData.e621?.auth) {
                             interactionQuickError(i, "You need to set up your e621 account first!", true);
                             break;
                         };
-                        var api = new E621Api(userData.e621);
+                        var api = new E621Api(userData.e621.auth);
                         api.voteOnPost(posts[postIndex].id, 1).then(() => {
                             interactionQuickInfo(i, `Upvoted post ${posts[postIndex].id}!`, true);
                         })
                     break;
                     case "downvote":
-                        if(!userData.e621) {
+                        if(!userData.e621?.auth) {
                             interactionQuickError(i, "You need to set up your e621 account first!", true);
                             break;
                         }
-                        var api = new E621Api(userData.e621);
+                        var api = new E621Api(userData.e621.auth);
                         api.voteOnPost(posts[postIndex].id, -1).then(() => {
                             interactionQuickInfo(i, `Downvoted post ${posts[postIndex].id}!`, true);
                         })
