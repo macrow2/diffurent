@@ -109,6 +109,19 @@ export class E621Api {
         });
         return posts;
     }
+    public async voteOnPost(id: number, vote: -1 | 1): Promise<void> {
+        if(!this.credentials) throw new Error("No credentials provided");
+        const res = await snek.post(`https://e621.net/posts/${id}/vote.json?score=${vote}`)
+        .set("Authorization", `Basic ${Buffer.from(`${this.credentials.username}:${this.credentials.apikey}`).toString("base64")}`)
+    }
+    public async addFavorite(id: number): Promise<void> {
+        if(!this.credentials) throw new Error("No credentials provided");
+        const res = await snek.post(`https://e621.net/favorites.json`)
+        .set("Authorization", `Basic ${Buffer.from(`${this.credentials.username}:${this.credentials.apikey}`).toString("base64")}`)
+        .send({
+            "post_id": id
+        });
+    }
 }
 
 export default E621Api;

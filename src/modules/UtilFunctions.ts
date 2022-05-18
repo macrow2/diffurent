@@ -61,6 +61,22 @@ export function interactionQuickError(interaction: Interaction, error: string, e
         });
 }
 
+export function interactionQuickInfo(interaction: Interaction, info: string, empheral?: Boolean, footer?: string): Promise<Message> {
+    let embed = new MessageEmbed();
+        embed.setTitle("Info");
+        embed.setDescription(info);
+        embed.setColor("#00ff00");
+        if (footer) embed.setFooter({text: footer});
+        // @ts-ignore - Typescript thinks interaction could be a non-command interaction
+        return interaction.reply({
+            embeds: [embed],
+            allowedMentions: {
+                repliedUser: false
+            },
+            ephemeral: empheral || false
+        });
+}
+
 export function getContextualPrefix(msg: Message, client: Client): string {
     let serverData = getServerData(msg.guild!, client);
     if (serverData.prefix != null) {
