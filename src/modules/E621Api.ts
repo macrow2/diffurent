@@ -73,9 +73,18 @@ export type Post = {
     duration: number | null;
 }
 
+type voteResponse = {
+    score: number,
+    up: number,
+    down: number,
+    our_score: number
+}
+
 export class E621Api {
     private credentials: Credentials | undefined;
+    public userAgent: string;
     constructor(creds?: Credentials) {
+        this.userAgent = "Diffurent/1.1.0 (contact: mmccall0813#0943 on discord)";
         this.credentials = creds || undefined;
     }
     public async getPost(id: number): Promise<Post> {
@@ -86,8 +95,10 @@ export class E621Api {
         const res = 
         this.credentials ? 
         await snek.get(`https://e621.net/posts.json?tags=${tags.join(" ")}&limit=${limit || 100}&page=${page || 1}`)
+        .set("user-agent", this.userAgent)
         .set("Authorization", `Basic ${Buffer.from(`${this.credentials.username}:${this.credentials.apikey}`).toString("base64")}`)
         : await snek.get(`https://e621.net/posts.json?tags=${tags.join(" ")}&limit=${limit || 100}&page=${page || 1}`)
+        .set("user-agent", this.userAgent);
         // messy, but it works
         
         const posts: Post[] = res.body.posts;
@@ -109,22 +120,39 @@ export class E621Api {
         });
         return posts;
     }
-    public async voteOnPost(id: number, vote: -1 | 1): Promise<void> {
+    public async voteOnPost(id: number, vote: -1 | 1): Promise<voteResponse> {
         if(!this.credentials) throw new Error("No credentials provided");
         const res = await snek.post(`https://e621.net/posts/${id}/votes.json`)
         .set("Authorization", `Basic ${Buffer.from(`${this.credentials.username}:${this.credentials.apikey}`).toString("base64")}`)
+        .set("user-agent", this.userAgent)
         .send({
             "score": vote.toString(),
             "no_unvote": false
         });
+        return res.body;
     }
-    public async addFavorite(id: number): Promise<void> {
+    public async addFavorite(id: number): Promise<boolean> {
         if(!this.credentials) throw new Error("No credentials provided");
+        try {
         const res = await snek.post(`https://e621.net/favorites.json`)
         .set("Authorization", `Basic ${Buffer.from(`${this.credentials.username}:${this.credentials.apikey}`).toString("base64")}`)
+        .set("user-agent", this.userAgent)
         .send({
             "post_id": id
-        });
+        })
+        return true;
+        } catch(e){
+            // already favorited probably
+            // try unfavoriting
+            await this.removeFavorite(id);
+            return false;
+        }
+    }
+    public async removeFavorite(id: number): Promise<void> {
+        if(!this.credentials) throw new Error("No credentials provided");
+        const res = await snek.delete(`https://e621.net/favorites/${id}.json`)
+        .set("Authorization", `Basic ${Buffer.from(`${this.credentials.username}:${this.credentials.apikey}`).toString("base64")}`)
+        .set("user-agent", this.userAgent);
     }
 }
 

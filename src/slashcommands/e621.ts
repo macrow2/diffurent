@@ -26,13 +26,13 @@ const exec = async (interaction: Interaction, client: Client) => {
     if(interaction.channel.type !== "GUILD_TEXT") return;
 
     const tags = interaction.options.getString("tags") || ""
-    const page = interaction.options.getInteger("page")
+    let page = interaction.options.getInteger("page") || 1;
     let userData = getUserData(interaction.user, client);
 
     const api = new E621Api(userData.e621?.auth ? userData.e621.auth : undefined);
 
     try {
-        const posts = await api.getPosts(tags.split(" "), 25, page || 1);
+        let posts = await api.getPosts(tags.split(" "), 50, page);
         var postIndex = 0;
         const ratingMap = {
             "e": "Explicit",
@@ -40,8 +40,17 @@ const exec = async (interaction: Interaction, client: Client) => {
             "s": "Safe"
         }
         const firstPost = posts[postIndex];
-        function createEmbed() : MessageEmbed {
+        var lastAction: string = "";
+        function createEmbed(action ?: string) : MessageEmbed {
+            if(action) lastAction = action;
             const post = posts[postIndex];
+            var nasty = (post.tags.general.includes("cub") || post.tags.general.includes("child") || post.tags.general.includes("loli")) && post.rating !== "s";
+            if(!nasty) {
+            if((post.rating == "e" || post.rating == "q") && interaction.channel?.type == "GUILD_TEXT" && interaction.channel.nsfw === false) return new MessageEmbed()
+            .setTitle("NSFW Channel Required")
+            .setDescription("This post is marked as NSFW, but this channel is not marked as NSFW. Please change the channel settings to mark this channel as NSFW.")
+            .setColor("#ff0000")
+            .setFooter({text: `Page ${page || 1}. Post ${postIndex + 1} of ${posts.length}`});
             const embed = new MessageEmbed()
                 .setTitle('E621')
                 .setURL(`https://e621.net/posts/${post.id}`)
@@ -58,6 +67,10 @@ const exec = async (interaction: Interaction, client: Client) => {
                 if(post.tags.artist.length > 0) embed.addField(post.tags.artist.length == 1 ? "Artist" : "Artists", post.tags.artist.join(', ').split("_").join("\\_"), true)
                 if(post.tags.character.length > 0) embed.addField(post.tags.character.length == 1 ? "Character" : "Characters", post.tags.character.join(', ').split("_").join("\\_"), true);
                 if(post.tags.species.length > 0) embed.addField("Species", post.tags.species.join(', ').split("_").join("\\_"), true);
+                if(action) embed.setAuthor({
+                    "name": action,
+                    "iconURL": "https://e621.net/favicon.ico"
+                });
                 if(!videoExts.includes(post.file.ext)) embed.setImage(post.file.url);
                 else {
                     embed.setDescription(`This post is a video. [Click here to watch it](${post.file.url})`);
@@ -65,40 +78,103 @@ const exec = async (interaction: Interaction, client: Client) => {
                 if(post.file.ext == "webm" && post.sample.has) embed.setImage(post.sample.url!);
 
             return embed;
+            } else {
+                const embed = new MessageEmbed()
+                .setTitle('E621')
+                .setColor("#ff0000")
+                .setDescription("Sorry, this post violates our hard-coded block on loli/child/cub content that is not marked as safe. Please search for something else, or continue looking through posts.")
+                .setFooter({
+                    text: `Page ${page || 1}. Post ${postIndex + 1} of ${posts.length}`,
+                })
+                return embed;
+            }
         }
 
         const row1 = new MessageActionRow()
             .addComponents( // server emojis since ios discord doesn't use twemoji
                 new MessageButton()
-                    .setEmoji("<:left:976302767847112755>")
+                    .setEmoji("<:left:976638690870837348>")
                     .setCustomId("prev")
-                    .setStyle("PRIMARY"),
+                    .setStyle("SECONDARY"),
                 new MessageButton()
-                    .setEmoji("<:right:976302767859728394>")
+                    .setEmoji("<:right:976638690841473024>")
                     .setCustomId("next")
-                    .setStyle("PRIMARY"),
+                    .setStyle("SECONDARY"),
                 new MessageButton()
                     .setEmoji("<:star:976540353714876507>")
                     .setCustomId("favorite")
                     .setStyle("PRIMARY"),
                 new MessageButton()
-                    .setEmoji("<:up:976302767750656080>")
+                    .setEmoji("<:up:976638690501738517>")
                     .setCustomId("upvote")
-                    .setStyle("PRIMARY")
+                    .setStyle("SUCCESS")
                     .setDisabled(false),
                 new MessageButton()
-                    .setEmoji("<:down:976302767700344882>")
+                    .setEmoji("<:down:976638927316328458>")
                     .setCustomId("downvote")
-                    .setStyle("PRIMARY")
+                    .setStyle("DANGER")
                     .setDisabled(false)
             )
 
-        if(((firstPost.rating == "e" || firstPost.rating == "q") && interaction.channel.nsfw) || firstPost.rating == "s") {
+            const row3 = new MessageActionRow()
+                .addComponents(
+                    new MessageButton()
+                        .setEmoji("<:pageleft:976671491087294495>")
+                        .setCustomId("pageleft")
+                        .setStyle("SECONDARY"),
+                    new MessageButton()
+                        .setEmoji("<:pageright:976671490802081883>")
+                        .setCustomId("pageright")
+                        .setStyle("SECONDARY")
+                )
+
+            const row2 = new MessageActionRow() // disabled buttons, used after timeout
+            .addComponents( // server emojis since ios discord doesn't use twemoji
+                new MessageButton()
+                    .setEmoji("<:left:976638690870837348>")
+                    .setCustomId("prev")
+                    .setStyle("SECONDARY")
+                    .setDisabled(true),
+                new MessageButton()
+                    .setEmoji("<:right:976638690841473024>")
+                    .setCustomId("next")
+                    .setStyle("SECONDARY")
+                    .setDisabled(true),
+                new MessageButton()
+                    .setEmoji("<:star:976540353714876507>")
+                    .setCustomId("favorite")
+                    .setStyle("PRIMARY")
+                    .setDisabled(true),
+                new MessageButton()
+                    .setEmoji("<:up:976638690501738517>")
+                    .setCustomId("upvote")
+                    .setStyle("SUCCESS")
+                    .setDisabled(true),
+                new MessageButton()
+                    .setEmoji("<:down:976638927316328458>")
+                    .setCustomId("downvote")
+                    .setStyle("DANGER")
+                    .setDisabled(true)
+            )
+
+            const row4 = new MessageActionRow()
+                .addComponents(
+                    new MessageButton()
+                        .setEmoji("<:pageleft:976671491087294495>")
+                        .setCustomId("pageleft")
+                        .setStyle("SECONDARY")
+                        .setDisabled(true),
+                    new MessageButton()
+                        .setEmoji("<:pageright:976671490802081883>")
+                        .setCustomId("pageright")
+                        .setStyle("SECONDARY")
+                        .setDisabled(true)
+                )
         
         interaction.reply({
             ephemeral: false,
             embeds: [createEmbed()],
-            components: [row1],
+            components: [row1, row3],
             fetchReply: true
         }).then ( (msg) => {
             
@@ -107,7 +183,14 @@ const exec = async (interaction: Interaction, client: Client) => {
             };
             const collector = interaction.channel?.createMessageComponentCollector({ filter: filter, time: 60000 });
 
-            collector?.on("collect", (i) => {
+            collector?.on("end", () => {
+                interaction.editReply({
+                        embeds: [createEmbed(lastAction)],
+                        components: [row2, row4]
+                    });
+            })
+
+            collector?.on("collect", async (i) => {
                 collector.resetTimer();
                 switch(i.customId) {
                     case "prev":
@@ -117,7 +200,7 @@ const exec = async (interaction: Interaction, client: Client) => {
                         i.deferUpdate();
                         interaction.editReply({
                             embeds: [createEmbed()],
-                            components: [row1]
+                            components: [row1, row3]
                         });
                     break;
                     case "next":
@@ -127,44 +210,91 @@ const exec = async (interaction: Interaction, client: Client) => {
                         i.deferUpdate();
                         interaction.editReply({
                             embeds: [createEmbed()],
-                            components: [row1]
+                            components: [row1, row3]
                         });
                     break;
                     case "favorite":
-                        if(!userData.e621?.auth) {
+                        var data = getUserData(i.user, client);
+                        if(!data.e621?.auth) {
                             interactionQuickError(i, "You need to set up your e621 account first!", true);
                             break;
                         };
-                        var api = new E621Api(userData.e621.auth);
-                        api.addFavorite(posts[postIndex].id).then(() => {
-                            interactionQuickInfo(i, `Added post ${posts[postIndex].id} to your favorites!`, true, "To remove it, you must go to the website and remove it there. (for now)");
+                        var api = new E621Api(data.e621.auth);
+                        i.deferUpdate();
+                        api.addFavorite(posts[postIndex].id).then((response) => {
+                            interaction.editReply({
+                                embeds: [createEmbed(`${i.user.username} ${response ? "added" : "removed"} this post ${response ? "to" : "from"} their favorites!`)],
+                                components: [row1, row3]
+                            });
                         })
                     break;
                     case "upvote":
-                        if(!userData.e621?.auth) {
+                        var data = getUserData(i.user, client);
+                        if(!data.e621?.auth) {
                             interactionQuickError(i, "You need to set up your e621 account first!", true);
                             break;
                         };
-                        var api = new E621Api(userData.e621.auth);
-                        api.voteOnPost(posts[postIndex].id, 1).then(() => {
-                            interactionQuickInfo(i, `Upvoted post ${posts[postIndex].id}!`, true);
+                        var api = new E621Api(data.e621.auth);
+                        api.voteOnPost(posts[postIndex].id, 1).then((json) => {
+                            posts[postIndex].score.up = json.up;
+                            posts[postIndex].score.down = json.down;
+                            posts[postIndex].score.total = json.score;
+                            //interactionQuickInfo(i, `${json.our_score ? "Added" : "Removed"} upvote ${json.our_score ? "to" : "from"} post!`);
+                            i.deferUpdate();
+                            interaction.editReply({
+                                embeds: [createEmbed(`${i.user.username} ${json.our_score ? "added" : "removed"} an upvote ${json.our_score ? "to" : "from"} this post!`)],
+                                components: [row1, row3]
+                            });
                         })
                     break;
                     case "downvote":
-                        if(!userData.e621?.auth) {
+                        var data = getUserData(i.user, client);
+                        if(!data.e621?.auth) {
                             interactionQuickError(i, "You need to set up your e621 account first!", true);
                             break;
                         }
-                        var api = new E621Api(userData.e621.auth);
-                        api.voteOnPost(posts[postIndex].id, -1).then(() => {
-                            interactionQuickInfo(i, `Downvoted post ${posts[postIndex].id}!`, true);
+                        var api = new E621Api(data.e621.auth);
+                        api.voteOnPost(posts[postIndex].id, -1).then((json) => {
+                            posts[postIndex].score.up = json.up;
+                            posts[postIndex].score.down = json.down;
+                            posts[postIndex].score.total = json.score;
+                            //interactionQuickInfo(i, `${json.our_score ? "Added" : "Removed"} downvote ${json.our_score ? "to" : "from"} post!`);
+                            i.deferUpdate();
+                            interaction.editReply({
+                                embeds: [createEmbed(`${i.user.username} ${json.our_score ? "added" : "removed"} a downvote ${json.our_score ? "to" : "from"} this post!`)],
+                                components: [row1, row3]
+                            });
                         })
+                    break;
+                    case "pageleft":
+                        var data = getUserData(i.user, client);
+                        var api = new E621Api(data.e621?.auth || undefined)
+                        // @ts-ignore
+                        if(page !== 1) page -=1;
+                        posts = await api.getPosts(tags.split(" "), 50, page);
+                        postIndex = 0;
+                        i.deferUpdate();
+                        interaction.editReply({
+                            embeds: [createEmbed()],
+                            components: [row1, row3]
+                        });
+                    break;
+                    case "pageright":
+                        var data = getUserData(i.user, client);
+                        var api = new E621Api(data.e621?.auth || undefined)
+                        // @ts-ignore
+                        if(posts.length !< 50 || page !== 750)page +=1;
+                        posts = await api.getPosts(tags.split(" "), 50, page);
+                        postIndex = 0;
+                        i.deferUpdate();
+                        interaction.editReply({
+                            embeds: [createEmbed()],
+                            components: [row1, row3]
+                        });
                 }
             })
 
         })
-        
-        } else interactionQuickError(interaction, `This post's rating is not appropriate for this channel. (${ratingMap[firstPost.rating]})`);
     } catch (error) {
         console.log(error);
         return interactionQuickError(interaction, "Invalid tags!", true);
