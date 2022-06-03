@@ -75,7 +75,7 @@ class Bot extends Client {
             commandData.push(command.data.toJSON());
         }
         const rest = new REST( {version: "10"} ).setToken(this.config.token);
-        rest.put(Routes.applicationGuildCommands(this.config.botID, this.config.testGuildId), {body: commandData}).then(() => {
+        rest.put(Routes.applicationCommands(this.config.botID), {body: commandData}).then((res) => {
             console.log(chalk.green("Successfully registered slash commands!"));
         })
     }
