@@ -13,20 +13,23 @@ class Bot extends Client {
     slashCommands: Array<Types.SlashCommand>;
     Users: Array<Types.UserData>;
     Servers: Array<Types.ServerData>;
+    debugSwitch: boolean;
     constructor(){
         super({ intents: [Intents.FLAGS.GUILDS, Intents.FLAGS.GUILD_MESSAGES] });
+
+        this.debugSwitch = false // only toggleable from eval command, for debugging purposes
+        // eval client.debugSwitch = true
+
         if(!fs.existsSync("../config.json")){
             // first run, probably didnt copy template
-            console.log(chalk.red("Config file missing, attempting to copy template to config.json"));
             try {
+                console.log(chalk.red("Config file missing, attempting to copy template to config.json"));
                 fs.copyFileSync("../config.template.json", "../config.json");
                 console.log(chalk.green("Successfully copied config template to proper location!\nPlease fill out the config file with the correct information."));
                 console.log(chalk.green("Exiting..."));
                 process.exit(0);
             } catch(err){
                 console.log(chalk.red("Couldn't copy template. Did you delete it?"));
-                console.log(err)
-                console.log(fs.readdirSync("../"))
                 process.exit(0)
             }
 
@@ -75,9 +78,15 @@ class Bot extends Client {
             commandData.push(command.data.toJSON());
         }
         const rest = new REST( {version: "10"} ).setToken(this.config.token);
-        rest.put(Routes.applicationCommands(this.config.botID), {body: commandData}).then((res) => {
-            console.log(chalk.green("Successfully registered slash commands!"));
-        })
+        if(this.config.commandRegisterType == "global"){
+            rest.put(Routes.applicationCommands(this.config.botID), {body: commandData}).then((res) => {
+                console.log(chalk.green("Successfully registered global slash commands! You may have to wait up to an hour for the commands to appear in all servers."));
+            })
+        } else if(this.config.commandRegisterType == "local"){
+            rest.put(Routes.applicationGuildCommands(this.config.botID, this.config.testGuildId), {body:commandData}).then((res) => {
+                console.log(chalk.green("Successfully registered local slash commands in guild " + this.config.testGuildId + "."))
+            })
+        }
     }
     removeSlashCommand(id: string){
         

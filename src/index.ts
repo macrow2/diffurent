@@ -1,11 +1,28 @@
 // es6 imports
 import * as fs from "fs";
+import * as typesense from "typesense";
 import * as Types from "./modules/Types"
 import * as utils from "./modules/UtilFunctions";
 import slashcommands from "./slashcommands/index";
 import extendedClient from "./modules/Client";
 import chalk from "chalk";
 const client = new extendedClient();
+
+let typeSenseClient: typesense.Client;
+
+// e621 tag searching
+if(client.config.typesense.enabled == true){
+    typeSenseClient = new typesense.Client({
+        'nodes': [
+            {
+                'host': client.config.typesense.host,
+                'port': client.config.typesense.port,
+                'protocol': client.config.typesense.protocol
+            }
+        ],
+        'apiKey': client.config.typesense.apiKey
+});
+}
 
 console.log(chalk.blue(`Found ${chalk.green(client.commands.length)} commands!`));
 
@@ -61,9 +78,48 @@ client.on("messageCreate", (msg) => {
 })
 
 client.on("interactionCreate", (interaction) => {
-    if(!interaction.isCommand()) return;
-
+    if(interaction.isCommand()){
+        if(client.debugSwitch) console.log(chalk.blue(`${interaction.user.tag} used ${interaction.command}`), `Further info: \nID:${interaction.id}`);
+        
     var cmd = client.slashCommands.filter(c => c.data.name == interaction.commandName)[0];
     if(!cmd) return;
     cmd.exec(interaction, client);
+    } else if(interaction.isAutocomplete()){
+        
+        switch(interaction.commandName){
+            case "e621":
+                let userInput = interaction.options.getFocused();
+                if(!userInput || typeof userInput == "number") return;
+                let last = userInput.split(" ")[userInput.split(" ").length - 1];
+                if(last.trim() == "") last == "*"
+
+                let search = typeSenseClient.collections("tags").documents().search({
+                    "q": last,
+                    "query_by": "name",
+                    "sort_by": "post_count:desc",
+                    "exhaustive_search": true
+                }).then( (res) => {
+                    // @ts-ignore
+                    // console.log(res.hits[0]);
+                    
+                    type toReturnRepsonse = {
+                        "name": string
+                        "value": string
+                    }
+                    let toReturn: Array<toReturnRepsonse> = [];
+                    res.hits?.forEach( (hit, index) => {
+                        // @ts-ignore
+                        let tagName : string = hit.document.name
+                        let val = userInput.toString().replace(last, "") + tagName
+
+                        toReturn.push({
+                            "name": val,
+                            "value": val
+                        })
+                    })
+
+                    interaction.respond(toReturn);
+                })
+        }
+    }
 })

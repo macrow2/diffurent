@@ -1,8 +1,15 @@
 {
   "prefix": "!!",
   "token": "",
+  "botID": "",
   "ownerID": "",
-  "coOwnerID": "",
   "testGuildId": "",
-  "botID": ""
+  "commandRegisterType": "global",
+  "typesense": {
+    "enabled": false,
+    "host": "localhost",
+    "port": 8108,
+    "protocol": "http",
+    "apiKey": "Let me in!!! :D"
+  }
 }

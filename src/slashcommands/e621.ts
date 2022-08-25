@@ -5,12 +5,16 @@ import { getUserData, interactionQuickError, interactionQuickInfo } from '../mod
 import {E621Api} from '../modules/E621Api';
 import Client from "../modules/Client";
 
+// import config and decide whether or not autocomplete should be enabled
+let typesenseEnabled = require("../../config.json").typesense.enabled 
+
 const data = new SlashCommandBuilder()
     .setName('e621')
     .setDescription('Fetches a post from e621.net using the given tags')
     .addStringOption(option => option.setName("tags")
         .setDescription("The tags you want to use to fetch a post.")
         .setRequired(false)
+        .setAutocomplete(typesenseEnabled)
     )
     .addIntegerOption(option => option.setName("page")
         .setDescription("The page you want to fetch.")
@@ -39,18 +43,17 @@ const exec = async (interaction: Interaction, client: Client) => {
             "q": "Questionable",
             "s": "Safe"
         }
-        const firstPost = posts[postIndex];
         var lastAction: string = "";
-        function createEmbed(action ?: string) : MessageEmbed {
+        function createEmbed(action ?: string) : [MessageEmbed, boolean] {
             if(action) lastAction = action;
             const post = posts[postIndex];
             var nasty = (post.tags.general.includes("cub") || post.tags.general.includes("child") || post.tags.general.includes("loli")) && post.rating !== "s";
             if(!nasty) {
-            if((post.rating == "e" || post.rating == "q") && interaction.channel?.type == "GUILD_TEXT" && interaction.channel.nsfw === false) return new MessageEmbed()
+            if((post.rating == "e" || post.rating == "q") && interaction.channel?.type == "GUILD_TEXT" && interaction.channel.nsfw === false) return [new MessageEmbed()
             .setTitle("NSFW Channel Required")
-            .setDescription("This post is marked as NSFW, but this channel is not marked as NSFW. Please change the channel settings to mark this channel as NSFW.")
+            .setDescription("This post contains NSFW content. To view this post, run this command in a NSFW channel, or ask a staff member to mark the current channel as NSFW.")
             .setColor("#ff0000")
-            .setFooter({text: `Page ${page || 1}. Post ${postIndex + 1} of ${posts.length}`});
+            .setFooter({text: `Page ${page || 1}. Post ${postIndex + 1} of ${posts.length}`}), true]
             const embed = new MessageEmbed()
                 .setTitle('E621')
                 .setURL(`https://e621.net/posts/${post.id}`)
@@ -77,7 +80,7 @@ const exec = async (interaction: Interaction, client: Client) => {
                 }
                 if(post.file.ext == "webm" && post.sample.has) embed.setImage(post.sample.url!);
 
-            return embed;
+            return [embed, false];
             } else {
                 const embed = new MessageEmbed()
                 .setTitle('E621')
@@ -86,7 +89,7 @@ const exec = async (interaction: Interaction, client: Client) => {
                 .setFooter({
                     text: `Page ${page || 1}. Post ${postIndex + 1} of ${posts.length}`,
                 })
-                return embed;
+                return [embed, true];
             }
         }
 
@@ -170,25 +173,88 @@ const exec = async (interaction: Interaction, client: Client) => {
                         .setStyle("SECONDARY")
                         .setDisabled(true)
                 )
+
+                const row5 = new MessageActionRow() // disabled up/down/fav buttons, used for cub block and nsfw block
+                .addComponents( // server emojis since ios discord doesn't use twemoji
+                    new MessageButton()
+                        .setEmoji("<:left:976638690870837348>")
+                        .setCustomId("prev")
+                        .setStyle("SECONDARY")
+                        .setDisabled(false),
+                    new MessageButton()
+                        .setEmoji("<:right:976638690841473024>")
+                        .setCustomId("next")
+                        .setStyle("SECONDARY")
+                        .setDisabled(false),
+                    new MessageButton()
+                        .setEmoji("<:star:976540353714876507>")
+                        .setCustomId("favorite")
+                        .setStyle("PRIMARY")
+                        .setDisabled(true),
+                    new MessageButton()
+                        .setEmoji("<:up:976638690501738517>")
+                        .setCustomId("upvote")
+                        .setStyle("SUCCESS")
+                        .setDisabled(true),
+                    new MessageButton()
+                        .setEmoji("<:down:976638927316328458>")
+                        .setCustomId("downvote")
+                        .setStyle("DANGER")
+                        .setDisabled(true)
+                )
         
+        // reply to interaction saying "Creating your E621 browser..."
+        // then reply to the message sent with the browser
+
+        const embed = new MessageEmbed()
+            .setDescription("Creating your E621 browser, <@" + interaction.user.id + ">")
+            .setTitle("Just a moment...")
+            .setFooter({
+                text: "Why? Discord only allows command replies to accept button presses for 15 minutes max."
+            })
+            
+        if(!interaction.inCachedGuild()){ 
+            interaction.reply("Woah! We ran into an internal error and could not execute the command! Please try again. If the issue persists, contact the developer.");
+            return;
+        }
+
         interaction.reply({
             ephemeral: false,
-            embeds: [createEmbed()],
-            components: [row1, row3],
+            embeds: [embed],
             fetchReply: true
+        }).then( (reply) => {
+
+        let createdEmbed = createEmbed();
+        let actualEmbed = createdEmbed[0];
+        let isBlocked = createdEmbed[1];
+
+        let toUse = [row1, row3];
+        if(isBlocked) toUse[0] = row5;
+
+        reply.reply({
+            embeds: [actualEmbed],
+            components: toUse
         }).then ( (msg) => {
             
             const filter = (i:Interaction) => {
                 return i.isButton() && i.channel!.id == interaction.channel!.id && i.message.id == msg.id
             };
-            const collector = interaction.channel?.createMessageComponentCollector({ filter: filter, time: 60000 });
+            const collector = interaction.channel?.createMessageComponentCollector({ filter: filter, time: 600000 });
 
+            
             collector?.on("end", () => {
-                interaction.editReply({
-                        embeds: [createEmbed(lastAction)],
+                let createdEmbed = createEmbed(lastAction);
+                let actualEmbed = createdEmbed[0];
+
+                msg.edit({
+                        embeds: [actualEmbed],
                         components: [row2, row4]
+                    }).catch( (err) => {
+                      // message was either deleted or interaction timed out   
                     });
+                
             })
+            
 
             collector?.on("collect", async (i) => {
                 collector.resetTimer();
@@ -198,9 +264,17 @@ const exec = async (interaction: Interaction, client: Client) => {
                         if(postIndex < 0) postIndex = posts.length - 1;
                         // update the embed
                         i.deferUpdate();
-                        interaction.editReply({
-                            embeds: [createEmbed()],
-                            components: [row1, row3]
+                        var createdEmbed = createEmbed();
+                        var actualEmbed = createdEmbed[0];
+                        var isBlocked = createdEmbed[1];
+                        
+                        var toUse = [row1, row3];
+                        if(isBlocked) toUse[0] = row5;
+                        msg.edit({
+                            embeds: [actualEmbed],
+                            components: toUse
+                        }).catch( (err) => {
+                            // message was either deleted or interaction timed out
                         });
                     break;
                     case "next":
@@ -208,9 +282,17 @@ const exec = async (interaction: Interaction, client: Client) => {
                         if(postIndex >= posts.length) postIndex = 0;
                         // update the embed
                         i.deferUpdate();
-                        interaction.editReply({
-                            embeds: [createEmbed()],
-                            components: [row1, row3]
+                        var createdEmbed = createEmbed();
+                        var actualEmbed = createdEmbed[0];
+                        var isBlocked = createdEmbed[1];
+
+                        var toUse = [row1, row3];
+                        if(isBlocked) toUse[0] = row5;
+                        msg.edit({
+                            embeds: [actualEmbed],
+                            components: toUse
+                        }).catch( (err) => {
+                            // message was either deleted or interaction timed out
                         });
                     break;
                     case "favorite":
@@ -222,9 +304,17 @@ const exec = async (interaction: Interaction, client: Client) => {
                         var api = new E621Api(data.e621.auth);
                         i.deferUpdate();
                         api.addFavorite(posts[postIndex].id).then((response) => {
-                            interaction.editReply({
-                                embeds: [createEmbed(`${i.user.username} ${response ? "added" : "removed"} this post ${response ? "to" : "from"} their favorites!`)],
-                                components: [row1, row3]
+                            var createdEmbed = createEmbed(`${i.user.username} ${response ? "added" : "removed"} this post ${response ? "to" : "from"} their favorites!`);
+                            var actualEmbed = createdEmbed[0];
+                            var isBlocked = createdEmbed[1];
+
+                            var toUse = [row1, row3];
+                            if(isBlocked) toUse[0] = row5;
+                            msg.edit({
+                                embeds: [actualEmbed],
+                                components: toUse
+                            }).catch( (err) => {
+                            // message was either deleted or interaction timed out
                             });
                         })
                     break;
@@ -235,15 +325,23 @@ const exec = async (interaction: Interaction, client: Client) => {
                             break;
                         };
                         var api = new E621Api(data.e621.auth);
+                        i.deferUpdate();
                         api.voteOnPost(posts[postIndex].id, 1).then((json) => {
                             posts[postIndex].score.up = json.up;
                             posts[postIndex].score.down = json.down;
                             posts[postIndex].score.total = json.score;
                             //interactionQuickInfo(i, `${json.our_score ? "Added" : "Removed"} upvote ${json.our_score ? "to" : "from"} post!`);
-                            i.deferUpdate();
-                            interaction.editReply({
-                                embeds: [createEmbed(`${i.user.username} ${json.our_score ? "added" : "removed"} an upvote ${json.our_score ? "to" : "from"} this post!`)],
-                                components: [row1, row3]
+                            var createdEmbed = createEmbed(`${i.user.username} ${json.our_score ? "added" : "removed"} an upvote ${json.our_score ? "to" : "from"} this post!`);
+                            var actualEmbed = createdEmbed[0];
+                            var isBlocked = createdEmbed[1];
+
+                            var toUse = [row1, row3];
+                            if(isBlocked) toUse[0] = row5;
+                            msg.edit({
+                                embeds: [actualEmbed],
+                                components: toUse
+                            }).catch( (err) => {
+                                // message was either deleted or interaction timed out
                             });
                         })
                     break;
@@ -254,15 +352,23 @@ const exec = async (interaction: Interaction, client: Client) => {
                             break;
                         }
                         var api = new E621Api(data.e621.auth);
+                        i.deferUpdate();
                         api.voteOnPost(posts[postIndex].id, -1).then((json) => {
                             posts[postIndex].score.up = json.up;
                             posts[postIndex].score.down = json.down;
                             posts[postIndex].score.total = json.score;
                             //interactionQuickInfo(i, `${json.our_score ? "Added" : "Removed"} downvote ${json.our_score ? "to" : "from"} post!`);
-                            i.deferUpdate();
-                            interaction.editReply({
-                                embeds: [createEmbed(`${i.user.username} ${json.our_score ? "added" : "removed"} a downvote ${json.our_score ? "to" : "from"} this post!`)],
-                                components: [row1, row3]
+                            var createdEmbed = createEmbed(`${i.user.username} ${json.our_score ? "added" : "removed"} a downvote ${json.our_score ? "to" : "from"} this post!`);
+                            var actualEmbed = createdEmbed[0];
+                            var isBlocked = createdEmbed[1];
+
+                            var toUse = [row1, row3];
+                            if(isBlocked) toUse[0] = row5;
+                            msg.edit({
+                                embeds: [actualEmbed],
+                                components: toUse
+                            }).catch( (err) => {
+                                // message was either deleted or interaction timed out
                             });
                         })
                     break;
@@ -274,9 +380,17 @@ const exec = async (interaction: Interaction, client: Client) => {
                         posts = await api.getPosts(tags.split(" "), 50, page);
                         postIndex = 0;
                         i.deferUpdate();
-                        interaction.editReply({
-                            embeds: [createEmbed()],
-                            components: [row1, row3]
+                        var createdEmbed = createEmbed();
+                        var actualEmbed = createdEmbed[0];
+                        var isBlocked = createdEmbed[1];
+
+                        var toUse = [row1, row3];
+                        if(isBlocked) toUse[0] = row5;
+                        msg.edit({
+                            embeds: [actualEmbed],
+                            components: toUse
+                        }).catch( (err) => {
+                            // message was either deleted or interaction timed out
                         });
                     break;
                     case "pageright":
@@ -287,14 +401,23 @@ const exec = async (interaction: Interaction, client: Client) => {
                         posts = await api.getPosts(tags.split(" "), 50, page);
                         postIndex = 0;
                         i.deferUpdate();
-                        interaction.editReply({
-                            embeds: [createEmbed()],
-                            components: [row1, row3]
+                        var createdEmbed = createEmbed();
+                        var actualEmbed = createdEmbed[0];
+                        var isBlocked = createdEmbed[1];
+
+                        var toUse = [row1, row3];
+                        if(isBlocked) toUse[0] = row5;
+                        msg.edit({
+                            embeds: [actualEmbed],
+                            components: toUse
+                        }).catch( (err) => {
+                            // message was either deleted or interaction timed out
                         });
                 }
             })
 
         })
+    })
     } catch (error) {
         console.log(error);
         return interactionQuickError(interaction, "Invalid tags!", true);
