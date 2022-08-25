@@ -23,6 +23,8 @@ First, double check you have the following installed:
 - Git
 - Node JS (latest lts preferred)
 
+Then open your favorite terminal emulator, and type these commands: 
+
 ```bash
 # clone the thing
 git clone https://github.com/macrow2/diffurent/
